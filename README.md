@@ -119,31 +119,17 @@ I built it to explore **end-to-end data flows**, **observability**, and **stream
 
 ## 🏢 Headquarters Stack (Docker Compose)
 
-  
-
-|Service|Role|Ports|
-
-|---|---|---|
-
-|**Postgres**|Mission registry + data warehouse (`params`, `LL` schemas)|5432|
-
-|**ShipsAPI (FastAPI)**|Fleet Command API for mission registration (`main.py`)|8000|
-
-|**Kafka (Bitnami)**|Message broker for live telemetry|9092 / 9094|
-
-|**MinIO**|Object storage for captain reports and telemetry parquet|9000 / 9001|
-
-|**Spark**|Processes real-time telemetry → MinIO|8082 / 4040 / 7077|
-
-|**Airflow**|Ingests manifests from MinIO to Postgres|8081|
-
-|**Metabase**|Business intelligence layer|3000|
-
-|**Grafana + Prometheus**|Live fleet health metrics dashboard|9090 / 3001|
-
-|**Adminer**|DB web access|8080|
-
-  
+| Service | Role | Ports |
+|----------|------|--------|
+| **Postgres** | Mission registry + data warehouse (`params`, `LL` schemas) | 5432 |
+| **ShipsAPI (FastAPI)** | Fleet Command API for mission registration (`main.py`) | 8000 |
+| **Kafka (Bitnami)** | Message broker for live telemetry | 9092 / 9094 |
+| **MinIO** | Object storage for captain reports and telemetry parquet | 9000 / 9001 |
+| **Spark** | Processes real-time telemetry → MinIO | 8082 / 4040 / 7077 |
+| **Airflow** | Ingests manifests from MinIO to Postgres | 8081 |
+| **Metabase** | Business intelligence layer | 3000 |
+| **Grafana + Prometheus** | Live fleet health metrics dashboard | 9090 / 3001 |
+| **Adminer** | DB web access | 8080 |
 
 Each container runs inside a shared Docker network (`hocotate-freight-data-platform_default`), meaning services reach each other via hostnames like `postgres`, `minio`, or `kafka`.
 
