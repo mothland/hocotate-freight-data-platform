@@ -45,71 +45,70 @@ I built it to explore **end-to-end data flows**, **observability**, and **stream
   
 
 ```
-
-     ┌──────────────────────────┐
-
-     │        LOCAL SHIP        │
-
-     │ (deploy_ship.py, main.py)│
-
-     └───────────┬──────────────┘
-
-                 │  Telemetry JSON
-
-                 ▼
-
-          ┌──────────────┐
-
-          │   Kafka      │
-
-          │  telemetry.raw
-
-          └──────┬───────┘
-
-                 │  real-time stream
-
-                 ▼
-
-     ┌────────────────────────────┐
-
-     │ Spark Structured Streaming │
-
-     │ (telemetry_stream.py)      │
-
-     └──────┬────────┬────────────┘
-
-            │        │
-
-            │        │
-
-     ┌──────▼───┐    │
-
-     │ MinIO    │◄───┘ (raw telemetry lake)
-
-     │ (s3://telemetry-lake)
-
-     └──────┬───┘
-
-            │
-
-     ┌──────▼────────────────────┐
-
-     │ Airflow (ll_ingest.py)    │
-
-     │ → Postgres (LL schema)    │
-
-     └────────┬──────────────────┘
-
-              │
-
-     ┌────────▼──────────────┐
-
-     │ Metabase / Grafana    │
-
-     │ (fleet analytics)     │
-
-     └───────────────────────┘
-
+                   ┌──────────────────────────┐
+                   │        LOCAL SHIP        │
+                   │ (deploy_ship.py, main.py)│
+                   └───────────┬──────────────┘
+                               │  Telemetry JSON
+                               ▼
+                        ┌──────────────┐
+                        │    Kafka     │
+                        │ telemetry.raw│
+                        └──────┬───────┘
+                               │
+              ┌────────────────┴───────────────┐
+              │                                │
+              │                                │
+   ┌──────────▼────────────┐          ┌────────▼──────────────┐
+   │ Spark Structured       │          │ Radar Backend (app.py)│
+   │ Streaming (telemetry_  │          │   → WebSocket bridge  │
+   │ stream.py)             │          │   to Radar Frontend   │
+   └──────┬────────┬────────┘          └────────┬──────────────┘
+          │        │                            │
+          │        │                            ▼
+          │        │                    ┌──────────────┐
+          │        │                    │ Radar Frontend│
+          │        │                    │ (index.html,  │
+          │        │                    │  main.js,     │
+          │        │                    │  style.css)   │
+          │        │                    └───────────────┘
+          │        │
+          │        ▼
+          │  ┌──────────────┐
+          │  │ Pushgateway  │
+          │  │ (metrics)    │
+          │  └──────┬───────┘
+          │         │
+          │  ┌──────▼────────┐
+          │  │ Prometheus    │
+          │  └──────┬────────┘
+          │         │
+          │  ┌──────▼────────┐
+          │  │ Grafana       │
+          │  │ (Dashboards)  │
+          │  └───────────────┘
+          │
+ ┌────────▼────────────┐
+ │  MinIO Object Store │
+ │ (telemetry-lake,    │
+ │  missions, logs)    │
+ └────────┬────────────┘
+          │
+ ┌────────▼──────────────┐
+ │ Airflow (ll_ingest.py)│
+ │ → ETL / Orchestration │
+ └────────┬──────▲────────┘
+          │      │
+          │      │ feedback loops (BL & SL)
+          ▼      │
+ ┌────────▼──────┴────────┐
+ │  Postgres Warehouse    │
+ │  (params, LL, BL, SL)  │
+ └────────┬───────────────┘
+          │
+ ┌────────▼──────────────┐
+ │ Metabase (Analytics)  │
+ └───────────────────────┘
 ```
 
   
