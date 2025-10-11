@@ -1,0 +1,8 @@
+minio:
+  endpoint: http://localhost:9000
+  access_key: shacho
+  secret_key: 20011026pikpikcarrots
+  buckets:
+    mission: missions
+    tech: tech
+    logs: logs

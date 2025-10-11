@@ -1,0 +1,112 @@
+# General .gitignore given to me by LLM
+
+# =====================================
+# 🐍 Python & Virtual Environments
+# =====================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# =====================================
+# 🧰 Local Data, Logs & Cache
+# =====================================
+data/
+volumes/
+logs/
+tmp/
+cache/
+*.csv
+*.json
+*.parquet
+*.db
+*.sqlite
+*.gz
+*.zip
+*.log
+*.pkl
+
+# =====================================
+# 🔐 Secrets & Local Config
+# =====================================
+.env
+.env.*
+*.pem
+*.crt
+*.key
+config.yaml
+config.yml
+
+# (optional examples kept)
+!.env.example
+!config.example.yaml
+
+# =====================================
+# 🐳 Docker / Containers
+# =====================================
+docker-volumes/
+*.pid
+*.sock
+*.tar
+
+# =====================================
+# 💻 IDE / OS Junk
+# =====================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.bak
+
+# =====================================
+# 📸 Media / Reports / Docs outputs
+# =====================================
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.pdf
+screenshots/
+reports/
+
+# =====================================
+# ✅ Keep project essentials
+# =====================================
+!*.py
+!*.sql
+!*.md
+!*.toml
+!*.html
+!*.css
+!*.js
+!docker-compose.yml
+!Dockerfile
+!requirements.txt
+
+# Grafana state and plugins
+grafana/
+!grafana/provisioning/
+
+# Airflow & Spark runtime state
+airflow/logs/
+airflow/tmp/
+spark/jars/
+spark-warehouse/
+metastore_db/
+.derby/
+*.jar
+
+# Monitoring / storage
+prometheus/
+minio/
+lake/
+
+*.jsonl

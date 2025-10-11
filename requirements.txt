@@ -1,0 +1,14 @@
+pandas>=2.2.0
+numpy>=1.26.0
+pyarrow>=15.0.0
+fastparquet>=2024.2.0
+minio>=7.2.5
+PyYAML>=6.0
+python-dotenv>=1.0.1
+requests>=2.32.0
+kafka-python
+psycopg2
+fastapi
+pyspark
+prometheus-client
+uvicorn[standard]

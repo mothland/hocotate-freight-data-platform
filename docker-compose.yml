@@ -1,0 +1,210 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: shacho
+      POSTGRES_PASSWORD: 20011026pikpikcarrots
+      POSTGRES_DB: hocotatefreight
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./volumes/db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shacho -d hocotatefreight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  shipsapi:
+    build: ./api
+    environment:
+      PG_HOST: postgres
+      PG_USER: shacho
+      PG_PASS: 20011026pikpikcarrots
+      PG_DB: hocotatefreight
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: shacho
+      MINIO_ROOT_PASSWORD: 20011026pikpikcarrots
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./volumes/lake:/data
+
+  airflow:
+    image: apache/airflow:2.9.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://shacho:20011026pikpikcarrots@postgres:5432/hocotatefreight
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/requirements.txt:/requirements.txt
+      - ./volumes/airflow_logs:/opt/airflow/logs
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "
+      pip install --no-cache-dir -r /requirements.txt &&
+      airflow db upgrade &&
+      airflow users create --username admin --password admin --firstname Shacho --lastname Hocotate --role Admin --email admin@example.com &&
+      airflow webserver &
+      airflow scheduler
+      "
+
+  metabase:
+    image: metabase/metabase:latest
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: hocotatefreight
+      MB_DB_PORT: 5432
+      MB_DB_USER: shacho
+      MB_DB_PASS: 20011026pikpikcarrots
+      MB_DB_HOST: postgres
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"   # host access
+      - "9093:9093"   # controller
+      - "9094:9094"   # internal Docker access
+    environment:
+      # --- Node identity & roles ---
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+
+      # --- Listeners ---
+      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      # --- Controller quorum ---
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # --- Broker behavior ---
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+    volumes:
+      - ./volumes/kafka_data:/bitnami/kafka
+    networks:
+      default:
+        aliases:
+          - kafka
+
+  spark:
+    image: apache/spark-py:v3.4.0
+    container_name: spark
+    user: root
+    environment:
+      - AWS_ACCESS_KEY_ID=shacho
+      - AWS_SECRET_ACCESS_KEY=20011026pikpikcarrots
+      - AWS_REGION=us-east-1
+      - SPARK_S3_ENDPOINT=http://minio:9000
+      - SPARK_S3_PATH_STYLE_ACCESS=true
+    ports:
+      - "8082:8080"
+      - "4040:4040"
+      - "7077:7077"
+    command: bash -c "pip install prometheus_client minio && mkdir -p /extra-jars && cd /extra-jars && echo 'Checking Kafka jars...' && [ -f spark-sql-kafka-0-10_2.12-3.3.0.jar ] || curl -LO https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.3.0/spark-sql-kafka-0-10_2.12-3.3.0.jar && [ -f spark-token-provider-kafka-0-10_2.12-3.3.0.jar ] || curl -LO https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.3.0/spark-token-provider-kafka-0-10_2.12-3.3.0.jar && [ -f kafka-clients-3.3.1.jar ] || curl -LO https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.3.1/kafka-clients-3.3.1.jar && [ -f commons-pool2-2.11.1.jar ] || curl -LO https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar && echo 'Kafka connectors ready. Launching Spark job...' && /opt/spark/bin/spark-submit --master local[*] --jars /extra-jars/hadoop-aws-3.3.4.jar,/extra-jars/aws-java-sdk-bundle-1.12.772.jar,/extra-jars/spark-sql-kafka-0-10_2.12-3.3.0.jar,/extra-jars/spark-token-provider-kafka-0-10_2.12-3.3.0.jar,/extra-jars/kafka-clients-3.3.1.jar,/extra-jars/commons-pool2-2.11.1.jar /opt/spark-apps/telemetry_stream.py"
+    volumes:
+      - ./spark:/opt/spark-apps
+      - ./spark/jars:/extra-jars
+      - ./volumes/spark_data:/tmp
+    depends_on:
+      - kafka
+      - minio
+      - postgres
+
+  spark-worker:
+    image: apache/spark-py:v3.4.0
+    container_name: spark-worker
+    user: root
+    entrypoint: >
+      /bin/bash -c "/opt/spark/sbin/start-worker.sh spark://spark:7077 &&
+                    tail -f /opt/spark/logs/spark--org.apache.spark.deploy.worker.Worker-1-*.out"
+    environment:
+      - AWS_ACCESS_KEY_ID=shacho
+      - AWS_SECRET_ACCESS_KEY=20011026pikpikcarrots
+      - AWS_REGION=us-east-1
+      - SPARK_S3_ENDPOINT=http://minio:9000
+      - SPARK_S3_PATH_STYLE_ACCESS=true
+      - SPARK_EXTRA_CLASSPATH=/extra-jars/*
+    depends_on:
+      - spark
+    volumes:
+      - ./spark:/opt/spark-apps
+      - ./spark/jars:/extra-jars
+      - ./volumes/spark_data:/tmp
+
+  # Prometheus stack (for live ship metrics)
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-hocotate
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - pushgateway
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-hocotate
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  db_data:
+  lake:
+  airflow_logs:
+  kafka_data:
+  spark_data:
