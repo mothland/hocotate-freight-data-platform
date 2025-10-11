@@ -99,7 +99,7 @@ I built it to explore **end-to-end data flows**, **observability**, and **stream
  │ → ETL / Orchestration │
  └────────┬──────▲────────┘
           │      │
-          │      │ feedback loops (BL & SL)
+          │      │ Batches for BL & SL
           ▼      │
  ┌────────▼──────┴────────┐
  │  Postgres Warehouse    │
