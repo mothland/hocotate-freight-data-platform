@@ -278,19 +278,11 @@ ll_init.sql       → Landing layer tables
 
 Ships and Spark both write to MinIO under distinct buckets:
 
-  
-
-|Bucket|Purpose|
-
-|---|---|
-
-|`telemetry-lake`|Raw Spark parquet telemetry|
-
-|`missions`|Uploaded daily captain reports|
-
-|`logs`|Automated upload events and checksums|
-
-  
+| Bucket | Purpose |
+|---------|----------|
+| `telemetry-lake` | Raw Spark parquet telemetry |
+| `missions` | Uploaded daily captain reports |
+| `logs` | Automated upload events and checksums |
 
 The buckets could use schema enforcing and a querying layer to make it decent as a lake, but that will be the object of a following push. I Promise...!
 
