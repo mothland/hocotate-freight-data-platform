@@ -72,19 +72,3 @@ CREATE TABLE LL.mission_reports (
 );
 
 COMMENT ON TABLE LL.mission_reports IS 'Mission-specific report values, extracted from manifests.';
-
--- -------------------------------------------
---  TREASURE REPORTS  (optional flavor data)
--- -------------------------------------------
-CREATE TABLE LL.treasure_reports (
-    mission_id          BIGINT REFERENCES params.missions(mission_id) ON DELETE CASCADE,
-    item_name           TEXT,
-    item_value_poko     NUMERIC,
-    item_weight_g       NUMERIC,
-    timestamp           TIMESTAMP,
-    file_checksum       CHAR(64),
-    source_file         TEXT,
-    loaded_at           TIMESTAMP DEFAULT now()
-);
-
-COMMENT ON TABLE LL.treasure_reports IS 'Optional treasure or cargo reports per mission.';

@@ -57,11 +57,18 @@ services:
     command: >
       bash -c "
       pip install --no-cache-dir -r /requirements.txt &&
-      airflow db upgrade &&
+      airflow db migrate &&
       airflow users create --username admin --password admin --firstname Shacho --lastname Hocotate --role Admin --email admin@example.com &&
-      airflow webserver &
-      airflow scheduler
+      echo '[supervisord]' > /tmp/supervisord.conf &&
+      echo 'nodaemon=true' >> /tmp/supervisord.conf &&
+      echo '[program:webserver]' >> /tmp/supervisord.conf &&
+      echo 'command=airflow webserver' >> /tmp/supervisord.conf &&
+      echo '[program:scheduler]' >> /tmp/supervisord.conf &&
+      echo 'command=airflow scheduler' >> /tmp/supervisord.conf &&
+      pip install supervisor &&
+      supervisord -c /tmp/supervisord.conf
       "
+
 
   metabase:
     image: metabase/metabase:latest

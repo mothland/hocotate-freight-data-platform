@@ -30,8 +30,10 @@ def list_manifests():
     manifests = [o.object_name for o in objs if o.object_name.endswith(".json")]
     return manifests
 
+
 def file_checksum_bytes(data: bytes):
     return hashlib.sha256(data).hexdigest()
+
 
 def load_manifest_into_db(manifest_name, **context):
     """Process one manifest: validate and insert its parquet into LL schema"""
@@ -82,10 +84,16 @@ def load_manifest_into_db(manifest_name, **context):
         FROM STDIN WITH (FORMAT csv);
     """, buffer)
 
-    # --- 5️⃣ Insert ship state (now properly reads nested coords!) ---
+    # --- 5️⃣ Insert ship state (supports both flat + nested coords) ---
     ship_state = manifest_json.get("ship_state")
     if ship_state:
-        coords = ship_state.get("coordinates", {})
+        coords = ship_state.get("coordinates") or {
+            "x_km": ship_state.get("coord_x"),
+            "y_km": ship_state.get("coord_y"),
+            "z_km": ship_state.get("coord_z"),
+            "planet": ship_state.get("planet", "UNKNOWN"),
+        }
+
         cur.execute("""
             INSERT INTO LL.ship_state (
                 mission_id, timestamp, fuel_prc, ship_condition,
@@ -100,7 +108,7 @@ def load_manifest_into_db(manifest_name, **context):
             "mission_id": mission_id,
             "fuel": ship_state.get("fuel_prc", 0),
             "state": ship_state.get("ship_condition", "UNKNOWN"),
-            "temp": ship_state.get("temperature_C", 0.0),
+            "temp": ship_state.get("temperature_C", ship_state.get("motor_temp_c", 0.0)),
             "rad": ship_state.get("radiation_uSv", 0.0),
             "cargo": ship_state.get("cargo_integrity_prc", 100),
             "x": coords.get("x_km", 0),
