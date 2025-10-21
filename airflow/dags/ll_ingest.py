@@ -1,5 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import datetime, timedelta
 from minio import Minio
 import pandas as pd
@@ -7,6 +9,7 @@ import psycopg2
 import io
 import json
 import hashlib
+
 
 # === CONFIG ===
 MINIO_ENDPOINT = "minio:9000"
@@ -22,13 +25,13 @@ PG_CONN = {
     "port": 5432,
 }
 
+
 # === HELPERS ===
 def list_manifests():
-    """List manifest files in MinIO (flat scan)"""
+    """List manifest files in MinIO (flat scan)."""
     client = Minio(MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASS, secure=False)
     objs = client.list_objects(BUCKET, recursive=True)
-    manifests = [o.object_name for o in objs if o.object_name.endswith(".json")]
-    return manifests
+    return [o.object_name for o in objs if o.object_name.endswith(".json")]
 
 
 def file_checksum_bytes(data: bytes):
@@ -36,7 +39,7 @@ def file_checksum_bytes(data: bytes):
 
 
 def load_manifest_into_db(manifest_name, **context):
-    """Process one manifest: validate and insert its parquet into LL schema"""
+    """Process one manifest: validate and insert its parquet + metadata into LL schema."""
     client = Minio(MINIO_ENDPOINT, access_key=MINIO_USER, secret_key=MINIO_PASS, secure=False)
 
     # --- 1️⃣ Fetch manifest ---
@@ -78,13 +81,12 @@ def load_manifest_into_db(manifest_name, **context):
     buffer = io.StringIO()
     df.to_csv(buffer, index=False, header=False)
     buffer.seek(0)
-
     cur.copy_expert("""
         COPY LL.mission_reports (mission_id, item, value, timestamp, file_checksum, source_file, loaded_at)
         FROM STDIN WITH (FORMAT csv);
     """, buffer)
 
-    # --- 5️⃣ Insert ship state (supports both flat + nested coords) ---
+    # --- 5️⃣ Insert ship state (supports both flat + nested coords + health) ---
     ship_state = manifest_json.get("ship_state")
     if ship_state:
         coords = ship_state.get("coordinates") or {
@@ -94,20 +96,30 @@ def load_manifest_into_db(manifest_name, **context):
             "planet": ship_state.get("planet", "UNKNOWN"),
         }
 
+        health = ship_state.get("health_scores", {})
+
         cur.execute("""
             INSERT INTO LL.ship_state (
-                mission_id, timestamp, fuel_prc, ship_condition,
-                temperature_C, radiation_uSv, cargo_integrity_prc,
+                mission_id, timestamp, ship_condition,
+                normalized_health_total, motor_health, engine_health, core_health, fuel_health,
+                fuel_prc, temperature_C, radiation_uSv, cargo_integrity_prc,
                 coord_x, coord_y, coord_z, planet, file_checksum, source_file
             )
             VALUES (
-                %(mission_id)s, now(), %(fuel)s, %(state)s, %(temp)s, %(rad)s,
-                %(cargo)s, %(x)s, %(y)s, %(z)s, %(planet)s, %(checksum)s, %(src)s
+                %(mission_id)s, now(), %(state)s,
+                %(norm_health)s, %(motor)s, %(engine)s, %(core)s, %(fuel_health)s,
+                %(fuel)s, %(temp)s, %(rad)s, %(cargo)s,
+                %(x)s, %(y)s, %(z)s, %(planet)s, %(checksum)s, %(src)s
             )
         """, {
             "mission_id": mission_id,
-            "fuel": ship_state.get("fuel_prc", 0),
             "state": ship_state.get("ship_condition", "UNKNOWN"),
+            "norm_health": ship_state.get("normalized_health_total"),
+            "motor": health.get("motor"),
+            "engine": health.get("engine"),
+            "core": health.get("core"),
+            "fuel_health": health.get("fuel"),
+            "fuel": ship_state.get("fuel_prc", 0),
             "temp": ship_state.get("temperature_C", ship_state.get("motor_temp_c", 0.0)),
             "rad": ship_state.get("radiation_uSv", 0.0),
             "cargo": ship_state.get("cargo_integrity_prc", 100),
@@ -139,7 +151,7 @@ def load_manifest_into_db(manifest_name, **context):
 
 # === DAG DEFINITION ===
 with DAG(
-    "minio_to_ll_ingest",
+    dag_id="minio_to_ll_ingest",
     description="Micro-batch ingestion from MinIO to Postgres LL schema",
     schedule_interval="*/15 * * * *",  # every 15 minutes
     start_date=datetime(2025, 10, 1),
@@ -148,6 +160,7 @@ with DAG(
     default_args={"owner": "hocotate-freight", "retries": 1, "retry_delay": timedelta(minutes=5)},
 ) as dag:
 
+    # --- 1️⃣ Ingest from MinIO to LL ---
     def discover_and_process(**context):
         manifests = list_manifests()
         for m in manifests:
@@ -159,4 +172,35 @@ with DAG(
         provide_context=True,
     )
 
-    ingest_task
+    # --- 2️⃣ Check if BL should be triggered ---
+    def should_trigger_bl(**context):
+        conn = psycopg2.connect(**PG_CONN)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(*) FROM LL.manifests
+            WHERE upload_time > now() - INTERVAL '15 minutes';
+        """)
+        result = cur.fetchone()
+        conn.close()
+
+        if result and result[0] > 0:
+            print("✅ New LL data → trigger BL DAG.")
+            return True
+
+        print("⏩ No new LL data → skip BL trigger.")
+        return False
+
+    check_bl = PythonOperator(
+        task_id="check_if_bl_needed",
+        python_callable=should_trigger_bl,
+    )
+
+    # --- 3️⃣ Trigger BL DAG ---
+    trigger_bl = TriggerDagRunOperator(
+        task_id="trigger_bl_dag",
+        trigger_dag_id="ll_to_bl_transform",
+        trigger_rule="all_success",
+    )
+
+    # --- DAG FLOW ---
+    ingest_task >> check_bl >> trigger_bl

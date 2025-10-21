@@ -1,9 +1,10 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from prometheus_client import CollectorRegistry, Gauge, pushadd_to_gateway
 from minio import Minio
 import threading
+import traceback
 
 # === CONFIG ===
 KAFKA_BROKER = "kafka:9094"
@@ -23,61 +24,70 @@ def ensure_bucket_exists():
     )
     if not client.bucket_exists(BUCKET):
         client.make_bucket(BUCKET)
-        print(f"Created bucket '{BUCKET}' in MinIO.")
+        print(f"✅ Created bucket '{BUCKET}' in MinIO.")
     else:
-        print(f"Bucket '{BUCKET}' already exists.")
+        print(f"🗂️ Bucket '{BUCKET}' already exists.")
 
 ensure_bucket_exists()
 
 # === PROMETHEUS HELPERS ===
 def push_metric(row):
-    """Push all telemetry fields to Prometheus (adds repair/failure gauges)."""
+    """Push telemetry for one ship/mission to Prometheus with persistent labels."""
     try:
         registry = CollectorRegistry()
 
         gauges = {
-            'ship_fuel_percent': ('Current fuel percentage', row.fuel_prc),
-            'ship_coord_x': ('Ship X coordinate', row.coord_x),
-            'ship_coord_y': ('Ship Y coordinate', row.coord_y),
-            'ship_coord_z': ('Ship Z coordinate', row.coord_z),
-            'ship_motor_temp_c': ('Motor temperature (C)', row.motor_temp_c),
-            'ship_engine_pressure_kpa': ('Engine pressure (kPa)', row.engine_pressure_kpa),
-            'ship_power_core_temp_c': ('Power core temperature (C)', row.power_core_temp_c),
-            'ship_navigation_signal_db': ('Navigation signal (dB)', row.navigation_signal_db),
-            'ship_distance_km': ('Distance from Hocotate (km)', row.distance_from_hocotate_km),
+            "ship_fuel_percent": ("Current fuel percentage", row.fuel_prc),
+            "ship_coord_x": ("Ship X coordinate", row.coord_x),
+            "ship_coord_y": ("Ship Y coordinate", row.coord_y),
+            "ship_coord_z": ("Ship Z coordinate", row.coord_z),
+            "ship_motor_temp_c": ("Motor temperature (C)", row.motor_temp_c),
+            "ship_engine_pressure_kpa": ("Engine pressure (kPa)", row.engine_pressure_kpa),
+            "ship_power_core_temp_c": ("Power core temperature (C)", row.power_core_temp_c),
+            "ship_navigation_signal_db": ("Navigation signal (dB)", row.navigation_signal_db),
+            "ship_distance_km": ("Distance from Hocotate (km)", row.distance_from_hocotate_km),
         }
 
-        # Add discrete state metrics
+        # Add discrete states
         if hasattr(row, "status"):
             gauges["ship_repair_flag"] = (
                 "1 if ship under repair, else 0",
-                1.0 if str(row.status).upper() == "REPAIR" else 0.0
+                1.0 if str(row.status).upper() == "REPAIR" else 0.0,
             )
-
         if hasattr(row, "mission_status"):
             gauges["ship_mission_success"] = (
-                "1 if mission success, 0 if failure or running",
-                1.0 if str(row.mission_status).upper() == "SUCCESS" else 0.0
+                "1 if mission success, 0 otherwise",
+                1.0 if str(row.mission_status).upper() == "SUCCESS" else 0.0,
             )
             gauges["ship_mission_failure"] = (
                 "1 if mission failed, 0 otherwise",
-                1.0 if str(row.mission_status).upper() == "FAILURE" else 0.0
+                1.0 if str(row.mission_status).upper() == "FAILURE" else 0.0,
             )
 
-        for metric_name, (description, value) in gauges.items():
-            g = Gauge(metric_name, description, ['ship'], registry=registry)
-            g.labels(ship=row.ship_id).set(float(value))
+        # Build gauges with labels ship_id + mission_id
+        for metric_name, (desc, value) in gauges.items():
+            g = Gauge(metric_name, desc, ["ship_id", "mission_id"], registry=registry)
+            g.labels(ship_id=row.ship_id, mission_id=row.mission_id).set(float(value))
 
-        push_to_gateway(PUSHGATEWAY, job="ship_telemetry", registry=registry)
+        # One persistent job, grouping by ship + mission
+        pushadd_to_gateway(
+            PUSHGATEWAY,
+            job="ship_telemetry",
+            registry=registry,
+            grouping_key={"ship": row.ship_id, "mission": row.mission_id},
+        )
+
+        print(f"🚀 Metrics pushed: {row.ship_id} → mission {row.mission_id}")
+
     except Exception as e:
-        print(f"[WARN] Prometheus push failed: {e}")
+        print(f"[WARN] Prometheus push failed for {row.ship_id}: {e}")
+        traceback.print_exc()
 
 def push_metrics_async(rows):
     def _push_all():
         for row in rows:
             push_metric(row)
-    thread = threading.Thread(target=_push_all, daemon=True)
-    thread.start()
+    threading.Thread(target=_push_all, daemon=True).start()
 
 # === SPARK SESSION ===
 spark = (
@@ -90,7 +100,6 @@ spark = (
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .getOrCreate()
 )
-
 spark.sparkContext.setLogLevel("WARN")
 
 # === TELEMETRY SCHEMA ===
@@ -107,7 +116,6 @@ telemetry_schema = StructType([
     StructField("power_core_temp_c", DoubleType()),
     StructField("navigation_signal_db", DoubleType()),
     StructField("distance_from_hocotate_km", DoubleType()),
-    # new status & mission_status
     StructField("status", StringType()),
     StructField("mission_status", StringType()),
 ])
@@ -124,9 +132,9 @@ def handle_batch(df, batch_id):
     )
 
     rows = parsed.collect()
+    print(f"🧭 Batch {batch_id}: {len(rows)} telemetry rows received.")
     push_metrics_async(rows)
 
-    # Append batch to Parquet (partitioned by mission_id)
     parsed.write.format("parquet") \
         .mode("append") \
         .partitionBy("mission_id") \

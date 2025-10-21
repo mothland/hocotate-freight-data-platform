@@ -105,7 +105,6 @@ metastore_db/
 *.jar
 
 # Monitoring / storage
-prometheus/
 minio/
 lake/
 

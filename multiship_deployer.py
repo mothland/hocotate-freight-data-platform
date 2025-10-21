@@ -4,7 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# === PLANETS (from your model) ===
 PLANETS = [
     "Hocotate", "PNF-404", "Karut", "Giya", "Nijo", "Sozor",
     "Koppai", "Ohri", "Moyama", "Flukuey", "Enohay", "Mihama",
@@ -12,7 +11,6 @@ PLANETS = [
     "Neechki", "Koodgio", "Maxima"
 ]
 
-# === 20 UNIQUE "CAPTAINS" — Pikmin world first, then crossover sci-fi ===
 CAPTAINS = [
     # Pikmin protagonists
     "Olimar", "Louie", "Alph", "Brittany", "Charlie",
@@ -22,12 +20,12 @@ CAPTAINS = [
     "Red Pikmin", "Blue Pikmin", "Yellow Pikmin", "Rock Pikmin",
 ]
 
-# === 20 UNIQUE SHIPS — starts with Pikmin canon, ends with Nintendo/Sega flavour ===
 SHIP_NAMES = [
-    "SS_DOLPHIN", "SS_DOLPHIN_II", "SS_MOTH", "SS_KITTY", "SS_NECTAR",
+    "SS_DOLPHIN", "HOCOTATE_SHIP", "SS_MOTH", "SS_KITTY", "SS_NECTAR",
     "SS_DRAGONFLY", "SS_SCARAB", "SS_COMET", "SS_ORION", "SS_METEOR",
     "SS_SPACENECTAR", "SS_BULBBLOSSOM", "SS_GOLDENSTEM", "SS_RUSTBEETLE",
     "SS_MANDIBLAR", "ONION?!", "BLUE_FALCON", "ODYSSEY", "GALAXIA", "HYPERION", 
+    "RAPHALZ", "SPACEBUS", "SS_BOING"
 ]
 
 

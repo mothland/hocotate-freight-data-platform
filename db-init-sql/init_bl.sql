@@ -1,12 +1,14 @@
 -- ==================================================
 --  BUSINESS LAYER (BL)
---  Derived aggregates from LL + PARAMS (best practice)
+--  Derived aggregates from LL + PARAMS
+--  Deterministic full rebuild (fresh, consistent)
 -- ==================================================
+
 DROP SCHEMA IF EXISTS BL CASCADE;
 CREATE SCHEMA BL;
 
 -- ------------------------------------------
--- Mission Summary (joins LL.ship_state + params)
+-- Mission Summary
 -- ------------------------------------------
 CREATE TABLE BL.mission_summary AS
 SELECT
@@ -27,7 +29,6 @@ SELECT
     AVG(s.radiation_uSv)::numeric                        AS avg_radiation_usv,
     AVG(s.cargo_integrity_prc)::numeric                  AS avg_cargo_int_prc,
 
-    /* Cast the ratio to numeric so ROUND/AVG work later */
     (SUM(CASE WHEN s.ship_condition = 'GOOD' THEN 1 ELSE 0 END)::numeric
      / NULLIF(COUNT(*),0)) AS uptime_ratio,
 
@@ -37,12 +38,17 @@ LEFT JOIN LL.ship_state s ON s.mission_id = m.mission_id
 GROUP BY m.mission_id, m.ship_name, m.captain, m.target,
          m.report_freq_min, m.status, m.started_at, m.finished_at;
 
+ALTER TABLE BL.mission_summary
+    ADD PRIMARY KEY (mission_id),
+    ADD CONSTRAINT mission_summary_fk
+        FOREIGN KEY (mission_id) REFERENCES params.missions(mission_id) ON DELETE CASCADE;
+
 COMMENT ON TABLE BL.mission_summary IS
 'Aggregated operational KPIs per mission from LL.ship_state joined with params.missions.';
 
 
 -- ------------------------------------------
--- Cargo Summary (joins LL.mission_reports + params)
+-- Cargo Summary
 -- ------------------------------------------
 CREATE TABLE BL.cargo_summary AS
 SELECT
@@ -51,20 +57,25 @@ SELECT
     m.captain,
     m.target,
     COUNT(DISTINCT t.item)               AS nb_unique_items,
-    SUM(t.value)::numeric           AS total_value_poko,
-    AVG(t.value)::numeric           AS avg_value,
-    MAX(t.value)::numeric           AS max_item_value,
+    SUM(t.value)::numeric                AS total_value_poko,
+    AVG(t.value)::numeric                AS avg_value,
+    MAX(t.value)::numeric                AS max_item_value,
     now() AS computed_at
 FROM params.missions m
 LEFT JOIN LL.mission_reports t ON t.mission_id = m.mission_id
 GROUP BY m.mission_id, m.ship_name, m.captain, m.target;
+
+ALTER TABLE BL.cargo_summary
+    ADD PRIMARY KEY (mission_id),
+    ADD CONSTRAINT cargo_summary_fk
+        FOREIGN KEY (mission_id) REFERENCES params.missions(mission_id) ON DELETE CASCADE;
 
 COMMENT ON TABLE BL.cargo_summary IS
 'Aggregated mission metrics joined with mission metadata.';
 
 
 -- ------------------------------------------
--- Manifest Summary (joins LL.manifests + params)
+-- Manifest Summary
 -- ------------------------------------------
 CREATE TABLE BL.manifest_summary AS
 SELECT
@@ -80,12 +91,17 @@ FROM params.missions m
 LEFT JOIN LL.manifests lm ON lm.mission_id = m.mission_id
 GROUP BY m.mission_id, m.ship_name, m.captain, m.target;
 
+ALTER TABLE BL.manifest_summary
+    ADD PRIMARY KEY (mission_id),
+    ADD CONSTRAINT manifest_summary_fk
+        FOREIGN KEY (mission_id) REFERENCES params.missions(mission_id) ON DELETE CASCADE;
+
 COMMENT ON TABLE BL.manifest_summary IS
 'Manifest upload metadata per mission, joined with params.';
 
 
 -- ------------------------------------------
--- Planet Summary (joins cargo + mission summaries)
+-- Planet Summary (depends on mission + cargo)
 -- ------------------------------------------
 CREATE TABLE BL.planet_summary AS
 SELECT
@@ -103,6 +119,9 @@ FROM params.missions m
 LEFT JOIN BL.mission_summary ms ON ms.mission_id = m.mission_id
 LEFT JOIN BL.cargo_summary cs ON cs.mission_id = m.mission_id
 GROUP BY m.target;
+
+ALTER TABLE BL.planet_summary
+    ADD PRIMARY KEY (planet);
 
 COMMENT ON TABLE BL.planet_summary IS
 'Aggregate KPIs per planet derived from missions joined with BL summaries.';

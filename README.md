@@ -366,6 +366,7 @@ To connect to anything, by default, it's usually going to be username shacho and
 I cannot guarantee everything will keep working if that is altered (I may have hardcoded some parts during tests. I need to fix that).
 Otherwise, try username admin and password admin.
 
+If kafka stops working for some reason, remove its volumes and restart it.
   
 
 ---

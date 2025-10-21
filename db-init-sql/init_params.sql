@@ -1,5 +1,5 @@
 -- ===========================================
---  PARAMS SCHEMA  —  Mission Registry
+--  PARAMS SCHEMA — Mission Registry
 -- ===========================================
 
 DROP SCHEMA IF EXISTS params CASCADE;
@@ -13,10 +13,28 @@ CREATE TABLE params.missions (
   report_freq_min    INT         NOT NULL,
   status             TEXT        DEFAULT 'RUNNING',   -- SUCCESS / FAILURE / RUNNING
   started_at         TIMESTAMP   DEFAULT now(),
-  finished_at        TIMESTAMP
+  finished_at        TIMESTAMP,
+  updated_at         TIMESTAMP   DEFAULT now()
 );
 
 COMMENT ON TABLE  params.missions IS 'Mission registry: defines each mission and its overall lifecycle.';
 COMMENT ON COLUMN params.missions.status IS 'Overall mission outcome: RUNNING, SUCCESS, or FAILURE.';
 COMMENT ON COLUMN params.missions.started_at IS 'Timestamp when the mission was registered.';
 COMMENT ON COLUMN params.missions.finished_at IS 'Timestamp when the mission was marked complete.';
+COMMENT ON COLUMN params.missions.updated_at IS 'Timestamp automatically refreshed on each update.';
+
+-- -------------------------------------------
+-- Auto-update trigger for updated_at column
+-- -------------------------------------------
+CREATE OR REPLACE FUNCTION params_missions_update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_params_missions_updated
+BEFORE UPDATE ON params.missions
+FOR EACH ROW
+EXECUTE FUNCTION params_missions_update_timestamp();

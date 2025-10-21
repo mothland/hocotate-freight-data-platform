@@ -48,6 +48,7 @@ services:
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/requirements.txt:/requirements.txt
+      - ./airflow/sql:/opt/airflow/sql
       - ./volumes/airflow_logs:/opt/airflow/logs
     ports:
       - "8081:8080"
@@ -58,16 +59,17 @@ services:
       bash -c "
       pip install --no-cache-dir -r /requirements.txt &&
       airflow db migrate &&
-      airflow users create --username admin --password admin --firstname Shacho --lastname Hocotate --role Admin --email admin@example.com &&
+      airflow users create --username admin --password admin --firstname Shacho --lastname Hocotate --role Admin --email admin@example.com || true &&
+      pip install supervisor &&
       echo '[supervisord]' > /tmp/supervisord.conf &&
       echo 'nodaemon=true' >> /tmp/supervisord.conf &&
       echo '[program:webserver]' >> /tmp/supervisord.conf &&
       echo 'command=airflow webserver' >> /tmp/supervisord.conf &&
       echo '[program:scheduler]' >> /tmp/supervisord.conf &&
       echo 'command=airflow scheduler' >> /tmp/supervisord.conf &&
-      pip install supervisor &&
-      supervisord -c /tmp/supervisord.conf
+      exec supervisord -c /tmp/supervisord.conf
       "
+
 
 
   metabase:
@@ -96,37 +98,33 @@ services:
   kafka:
     image: bitnami/kafka:latest
     container_name: kafka
-    restart: unless-stopped
     ports:
-      - "9092:9092"   # host access
-      - "9093:9093"   # controller
-      - "9094:9094"   # internal Docker access
+      - "9092:9092"   # Host access
+      - "9093:9093"   # Controller
+      - "9094:9094"   # Internal Docker access
     environment:
-      # --- Node identity & roles ---
+      # === Core Node & Roles ===
       KAFKA_CFG_NODE_ID: 1
       KAFKA_CFG_PROCESS_ROLES: controller,broker
-
-      # --- Listeners ---
-      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:9094
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-      # --- Controller quorum ---
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
 
-      # --- Broker behavior ---
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # === Listeners ===
+      # - 9092 for host machine (localhost)
+      # - 9094 for internal Docker clients
+      # - 9093 for controller
+      KAFKA_CFG_LISTENERS: PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_DOCKER://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:9092,PLAINTEXT_DOCKER://kafka:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_DOCKER:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT_DOCKER
+
+      # === Broker Behavior ===
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_CFG_DELETE_TOPIC_ENABLE: "true"
       KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
     volumes:
       - ./volumes/kafka_data:/bitnami/kafka
-    networks:
-      default:
-        aliases:
-          - kafka
 
   spark:
     image: apache/spark-py:v3.4.0

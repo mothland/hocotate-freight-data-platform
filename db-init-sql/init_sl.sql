@@ -1,7 +1,9 @@
 -- ==================================================
 --  SERVING LAYER (SL)
 --  Marts built from BL
+--  Deterministic full rebuild (fresh, consistent)
 -- ==================================================
+
 DROP SCHEMA IF EXISTS SL CASCADE;
 CREATE SCHEMA SL;
 
@@ -24,6 +26,9 @@ LEFT JOIN BL.cargo_summary cs USING (mission_id);
 
 COMMENT ON MATERIALIZED VIEW SL.mart_fleet_kpis IS
 'Fleet-wide KPIs derived from BL mission and cargo summaries.';
+
+CREATE UNIQUE INDEX IF NOT EXISTS mart_fleet_kpis_idx
+    ON SL.mart_fleet_kpis ((1));
 
 
 -- ==================================================
@@ -66,6 +71,9 @@ ORDER BY total_value_poko DESC;
 COMMENT ON MATERIALIZED VIEW SL.mart_captain_performance IS
 'Captain leaderboard with favorite ship, success rate, uptime, and economic yield.';
 
+CREATE INDEX IF NOT EXISTS mart_captain_perf_idx
+    ON SL.mart_captain_performance (total_value_poko DESC);
+
 
 -- ==================================================
 --  3. Planet Performance — most visited, profitable, or dangerous
@@ -95,6 +103,9 @@ ORDER BY nb_missions_total DESC;
 COMMENT ON MATERIALIZED VIEW SL.mart_planet_performance IS
 'Route analytics: planet visit frequency, reliability, and profitability.';
 
+CREATE INDEX IF NOT EXISTS mart_planet_perf_idx
+    ON SL.mart_planet_performance (nb_missions_total DESC);
+
 
 -- ==================================================
 --  4. Ship Performance — reliability & yield per vessel
@@ -123,3 +134,6 @@ ORDER BY total_value_poko DESC;
 
 COMMENT ON MATERIALIZED VIEW SL.mart_ship_performance IS
 'Ship-level performance and reliability metrics derived from BL summaries.';
+
+CREATE INDEX IF NOT EXISTS mart_ship_perf_idx
+    ON SL.mart_ship_performance (total_value_poko DESC);
