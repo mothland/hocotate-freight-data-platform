@@ -65,17 +65,6 @@ Thumbs.db
 *.swp
 *.bak
 
-# =====================================
-# 📸 Media / Reports / Docs outputs
-# =====================================
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-*.pdf
-screenshots/
-reports/
 
 # =====================================
 # ✅ Keep project essentials
