@@ -539,3 +539,16 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 
 
 > _"One day… the fleet will fly back home."_ 🚀
+
+---
+
+## Gallery
+
+![alt text](readme_media/adminer_screenshot.png)
+![alt text](readme_media/ll_mission_reports.png)
+![alt text](readme_media/ll_mission_reports.png)
+![alt text](readme_media/planet_summary_adminer.png)
+
+<video controls src="readme_media/recording_grafana.mp4" title="Title"></video>
+
+<video controls src="readme_media/recording_space_map.mp4" title="Title"></video>
