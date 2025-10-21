@@ -544,10 +544,17 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 
 ## Gallery
 
+
+<p float="left">
 ![alt text](readme_media/adminer_screenshot.png)
+
 ![alt text](readme_media/ll_mission_reports.png)
+
 ![alt text](readme_media/ll_mission_reports.png)
+
 ![alt text](readme_media/planet_summary_adminer.png)
+</p>
+
 
 <video controls src="readme_media/recording_grafana.mp4" title="Title"></video>
 
