@@ -546,6 +546,7 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 
 
 <p float="left">
+
 ![alt text](readme_media/adminer_screenshot.png)
 
 ![alt text](readme_media/ll_mission_reports.png)
