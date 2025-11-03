@@ -1,4 +1,4 @@
-![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
+![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python)
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache-Kafka-231F20?logo=apachekafka)
 ![Apache Spark](https://img.shields.io/badge/Apache-Spark-E25A1C?logo=apachespark)
