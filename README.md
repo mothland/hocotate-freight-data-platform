@@ -153,11 +153,6 @@ Outside Docker, each ship is simulated by:
 
 - `telemetry_stream.py` (runs in HQ) – continuously reads telemetry from Kafka.
 
-
-I would have loved for ships to be deployed via batch, but it would make little to no business sense (since Pikmin's hocotate freight is mission-based).
-
-You can launch one ship per console, so prepare a bunch!
-
 Ships get launched using:
 
 ```bash
@@ -166,6 +161,26 @@ pip install -r requirements.txt
 python deploy_ship.py --ship="{nameyourship}" --captain="{nameyourcaptain}" --target="{one_of_the_existing_planets}" --reportfreq=2
 
 ```
+
+....for one ship at a time.
+
+Or 
+
+```bash
+pip install -r requirements.txt
+
+python multiship_deployer.py
+
+```
+
+....for multiple ships. It can accept the following arguments :
+
+| Argument       | Type             | Default | Description                                                                         |
+| -------------- | ---------------- | ------- | ----------------------------------------------------------------------------------- |
+| `--count`      | `int`            | `5`     | Number of ships to launch (maximum 20).                                             |
+| `--reportfreq` | `int`            | `1`     | Minutes between each telemetry report from a ship.                                  |
+| `--dry-run`    | `flag` (boolean) | `False` | If set, **only prints** the generated commands instead of actually launching ships. |
+
 
 And about how they connect to Kafka...
   
