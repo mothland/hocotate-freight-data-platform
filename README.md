@@ -187,9 +187,9 @@ Direct database connection is established via the shipsapi! Which is a simple py
   
 
 ## 🖥 Radar Visualization
-
-  
-
+<p>
+![Space Map Demo](readme_media/recording_space_map.gif)
+</p>
 **Frontend:**
 
 - `index.html`, `main.js`, `style.css`
@@ -300,6 +300,9 @@ Grafana provides a mission-control-style dashboard, with gauges, line graphs, an
 > “Grafana dashboards are automatically populated if you configure the Prometheus data source at http://prometheus:9090.
 > This can be done inside the UI, too (which is what I've been doing for now).”
 
+<p>
+![Grafana Demo](readme_media/recording_grafana.gif)
+</p>
 ---
 
   
@@ -555,7 +558,3 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 
 ![alt text](readme_media/planet_summary_adminer.png)
 </p>
-
-
-![Grafana Demo](readme_media/recording_grafana.gif)
-![Space Map Demo](readme_media/recording_space_map.gif)
