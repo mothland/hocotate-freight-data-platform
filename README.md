@@ -557,6 +557,5 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 </p>
 
 
-<video controls src="readme_media/recording_grafana.mp4" title="Title"></video>
-
-<video controls src="readme_media/recording_space_map.mp4" title="Title"></video>
+![Grafana Demo](readme_media/recording_grafana.gif)
+![Space Map Demo](readme_media/recording_space_map.gif)

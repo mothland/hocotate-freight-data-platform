@@ -11,15 +11,22 @@ body {
   overflow: hidden;
 }
 
-/* Canvas layer */
+/* Canvas layers */
 canvas {
   position: absolute;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  filter: brightness(1) contrast(1.1);
+}
+
+#bg {
   z-index: 0;
+  filter: brightness(1) contrast(1.1);
+}
+
+#map {
+  z-index: 1;
 }
 
 /* HUD and Controls above canvas */

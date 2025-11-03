@@ -1,14 +1,23 @@
 // === INITIAL SETUP ===
+const bgCanvas = document.getElementById("bg");
+const bgCtx = bgCanvas.getContext("2d");
 const canvas = document.getElementById("map");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+ctx.imageSmoothingEnabled = false;
+
+bgCanvas.width = canvas.width = window.innerWidth;
+bgCanvas.height = canvas.height = window.innerHeight;
 
 const center = { x: canvas.width / 2, y: canvas.height / 2 };
 const SCALE = 4e-7;
 let panX = 0, panY = 0;
 let zoom = 3;
 let time = 0;
+
+// === MOTION DETECTION ===
+let dragging = false, moving = false;
+let lastX = 0, lastY = 0;
+let moveTimer = null;
 
 // === PLANET DATA ===
 const PLANETS = {
@@ -38,28 +47,47 @@ const PLANETS = {
 // === COORDINATE HELPERS ===
 function toScreen(x, y) {
   return [
-    center.x + (x * SCALE * zoom) + panX,
-    center.y - (y * SCALE * zoom) - panY
+    Math.round(center.x + (x * SCALE * zoom) + panX),
+    Math.round(center.y + (y * SCALE * zoom) + panY)
   ];
 }
 
-// === BACKGROUND ===
+// === STARFIELD ===
+// Cover the whole possible map area, even at max zoom out
+const STARFIELD_RADIUS = 8e9; // much larger than outer planets
+const STAR_COUNT = 5000; // bump up count for more coverage
+
+const stars = Array.from({ length: STAR_COUNT }, () => ({
+  x: (Math.random() - 0.5) * STARFIELD_RADIUS * 2,
+  y: (Math.random() - 0.5) * STARFIELD_RADIUS * 2,
+  color: (() => {
+    const r = Math.random();
+    if (r < 0.6) return "rgba(255,255,255," + (0.3 + Math.random() * 0.7) + ")";
+    if (r < 0.8) return "rgba(150,200,255," + (0.3 + Math.random() * 0.7) + ")";
+    return "rgba(180,255,200," + (0.3 + Math.random() * 0.7) + ")";
+  })(),
+  size: Math.random() < 0.98 ? 1 : 1.5
+}));
+
 function drawStarfield() {
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  for (let i = 0; i < 300; i++) {
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    ctx.fillRect(x, y, 1, 1);
+  for (const s of stars) {
+    const [sx, sy] = toScreen(s.x, s.y);
+    // skip off-screen stars to save GPU time
+    if (sx < -5 || sy < -5 || sx > bgCanvas.width + 5 || sy > bgCanvas.height + 5) continue;
+    bgCtx.fillStyle = s.color;
+    bgCtx.fillRect(sx, sy, s.size, s.size);
   }
 }
 
+
+// === DECOR ===
 function drawScanLines() {
-  ctx.strokeStyle = "rgba(0, 255, 150, 0.03)";
+  bgCtx.strokeStyle = "rgba(0, 255, 150, 0.03)";
   for (let i = 0; i < canvas.height; i += 4) {
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(canvas.width, i);
-    ctx.stroke();
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, i);
+    bgCtx.lineTo(canvas.width, i);
+    bgCtx.stroke();
   }
 }
 
@@ -97,7 +125,6 @@ function drawOrbits() {
 function drawPlanets() {
   ctx.font = "bold 13px 'Courier New'";
   ctx.textAlign = "center";
-
   for (const [name, [x, y]] of Object.entries(PLANETS)) {
     const [sx, sy] = toScreen(x, y);
     const pulse = Math.sin(time * 0.003) * 0.3 + 0.7;
@@ -122,21 +149,16 @@ function drawPlanets() {
 
 // === DYNAMIC SHIPS ===
 let ships = [];
-const fadingShips = {}; // {ship_id: opacity}
+const fadingShips = {};
 
 function drawShips() {
   ctx.font = "11px 'Courier New'";
   ctx.textAlign = "center";
-
   for (const s of ships) {
     const [sx, sy] = toScreen(s.coord_x, s.coord_y);
-
-    // Determine color by status
-    let color = "#ffaa00"; // OK = yellow
+    let color = "#ffaa00";
     if (s.status === "REPAIR") color = "#ff3333";
     if (s.status === "FAILURE") color = "#888888";
-
-    // Handle fade-out animation
     const id = s.ship_id || s.ship || "?";
     let alpha = fadingShips[id] ?? 1.0;
     ctx.fillStyle = color;
@@ -144,11 +166,10 @@ function drawShips() {
     ctx.beginPath();
     ctx.arc(sx, sy, 5, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.globalAlpha = 1.0; // reset alpha
+    ctx.globalAlpha = 1.0;
     ctx.fillText(id, sx, sy - 10);
   }
 
-  // Gradually fade out removed ships
   for (const [id, opacity] of Object.entries(fadingShips)) {
     if (!ships.some(s => s.ship_id === id)) {
       fadingShips[id] = Math.max(0, opacity - 0.02);
@@ -159,21 +180,38 @@ function drawShips() {
 
 // === MAIN LOOP ===
 function draw() {
-  ctx.fillStyle = "rgba(10, 14, 39, 0.25)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // --- Background layer with trails ---
+  bgCtx.fillStyle = "rgba(10,14,39,0.25)";
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
   drawStarfield();
   drawScanLines();
+
+  // --- Gradient radar sweep centered on Hocotate ---
+  const [hocotateX, hocotateY] = toScreen(0, 0);
+  const sweepAngle = (time * 0.01) % (2 * Math.PI);
+  const radius = Math.max(canvas.width, canvas.height) * 0.8;
+  const grad = bgCtx.createRadialGradient(hocotateX, hocotateY, 0, hocotateX, hocotateY, radius);
+  grad.addColorStop(0, "rgba(0,255,150,0.15)");
+  grad.addColorStop(1, "rgba(0,255,150,0)");
+  bgCtx.strokeStyle = grad;
+  bgCtx.lineWidth = 2;
+  bgCtx.beginPath();
+  bgCtx.moveTo(hocotateX, hocotateY);
+  bgCtx.arc(hocotateX, hocotateY, radius, sweepAngle, sweepAngle + 0.1);
+  bgCtx.stroke();
+
+  // --- Crisp foreground layer (clear each frame) ---
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawOrbits();
   drawPlanets();
   drawShips();
+
   time++;
   requestAnimationFrame(draw);
 }
 draw();
 
 // === MOUSE + ZOOM ===
-let dragging = false, lastX = 0, lastY = 0;
-
 canvas.addEventListener("mousedown", e => {
   dragging = true;
   lastX = e.clientX;
@@ -183,10 +221,13 @@ canvas.addEventListener("mouseup", () => dragging = false);
 canvas.addEventListener("mouseleave", () => dragging = false);
 canvas.addEventListener("mousemove", e => {
   if (dragging) {
-    panX += e.clientX - lastX;
-    panY += e.clientY - lastY;
+    panX += (e.clientX - lastX);
+    panY += (e.clientY - lastY);
     lastX = e.clientX;
     lastY = e.clientY;
+    moving = true;
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => moving = false, 120);
   }
 });
 
@@ -197,22 +238,47 @@ document.getElementById("zoomOut").addEventListener("click", () => {
   zoom = Math.max(zoom / 1.2, 0.1);
 });
 
+// === SCROLL / TRACKPAD ZOOM ===
+canvas.addEventListener("wheel", e => {
+  e.preventDefault(); // stop page scroll
+  const zoomIntensity = 0.1;
+
+  // detect direction: negative deltaY = zoom in, positive = zoom out
+  const direction = e.deltaY > 0 ? -1 : 1;
+  const factor = 1 + direction * zoomIntensity;
+
+  // OPTIONAL: zoom centered on cursor instead of screen center
+  const mouseX = e.clientX;
+  const mouseY = e.clientY;
+
+  // compute world position before zoom
+  const worldX = (mouseX - center.x - panX) / (SCALE * zoom);
+  const worldY = (mouseY - center.y - panY) / (SCALE * zoom);
+
+  // apply zoom
+  const newZoom = Math.min(Math.max(zoom * factor, 0.5), 12);
+  zoom = newZoom;
+
+  // adjust pan so the point under the cursor stays stable
+  panX = mouseX - center.x - worldX * (SCALE * zoom);
+  panY = mouseY - center.y - worldY * (SCALE * zoom);
+});
+
+
 window.addEventListener("resize", () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  bgCanvas.width = canvas.width = window.innerWidth;
+  bgCanvas.height = canvas.height = window.innerHeight;
   center.x = canvas.width / 2;
   center.y = canvas.height / 2;
 });
 
 // === LIVE RADAR FEED ===
 const ws = new WebSocket("ws://localhost:8001/ws");
-
 ws.onopen = () => console.log("📡 Connected to radar bridge");
-ws.onmessage = (event) => {
+ws.onmessage = e => {
   try {
-    const newShips = JSON.parse(event.data);
+    const newShips = JSON.parse(e.data);
     const ids = newShips.map(s => s.ship_id || s.ship);
-    // Start fading for ships that disappeared
     for (const old of ships) {
       const id = old.ship_id || old.ship;
       if (!ids.includes(id)) fadingShips[id] = fadingShips[id] ?? 1.0;
@@ -223,6 +289,5 @@ ws.onmessage = (event) => {
     console.error("Bad WS data:", err);
   }
 };
-
-ws.onerror = (e) => console.error("WS error:", e);
+ws.onerror = e => console.error("WS error:", e);
 ws.onclose = () => console.log("🔌 Radar bridge disconnected");
