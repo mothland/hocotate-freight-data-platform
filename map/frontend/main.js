@@ -14,6 +14,10 @@ let panX = 0, panY = 0;
 let zoom = 3;
 let time = 0;
 
+// === ZOOM LIMITS ===
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 12;
+
 // === MOTION DETECTION ===
 let dragging = false, moving = false;
 let lastX = 0, lastY = 0;
@@ -53,9 +57,8 @@ function toScreen(x, y) {
 }
 
 // === STARFIELD ===
-// Cover the whole possible map area, even at max zoom out
-const STARFIELD_RADIUS = 8e9; // much larger than outer planets
-const STAR_COUNT = 5000; // bump up count for more coverage
+const STARFIELD_RADIUS = 8e10;
+const STAR_COUNT = 500000;
 
 const stars = Array.from({ length: STAR_COUNT }, () => ({
   x: (Math.random() - 0.5) * STARFIELD_RADIUS * 2,
@@ -72,13 +75,11 @@ const stars = Array.from({ length: STAR_COUNT }, () => ({
 function drawStarfield() {
   for (const s of stars) {
     const [sx, sy] = toScreen(s.x, s.y);
-    // skip off-screen stars to save GPU time
     if (sx < -5 || sy < -5 || sx > bgCanvas.width + 5 || sy > bgCanvas.height + 5) continue;
     bgCtx.fillStyle = s.color;
     bgCtx.fillRect(sx, sy, s.size, s.size);
   }
 }
-
 
 // === DECOR ===
 function drawScanLines() {
@@ -180,13 +181,11 @@ function drawShips() {
 
 // === MAIN LOOP ===
 function draw() {
-  // --- Background layer with trails ---
   bgCtx.fillStyle = "rgba(10,14,39,0.25)";
   bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
   drawStarfield();
   drawScanLines();
 
-  // --- Gradient radar sweep centered on Hocotate ---
   const [hocotateX, hocotateY] = toScreen(0, 0);
   const sweepAngle = (time * 0.01) % (2 * Math.PI);
   const radius = Math.max(canvas.width, canvas.height) * 0.8;
@@ -200,7 +199,6 @@ function draw() {
   bgCtx.arc(hocotateX, hocotateY, radius, sweepAngle, sweepAngle + 0.1);
   bgCtx.stroke();
 
-  // --- Crisp foreground layer (clear each frame) ---
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawOrbits();
   drawPlanets();
@@ -232,38 +230,29 @@ canvas.addEventListener("mousemove", e => {
 });
 
 document.getElementById("zoomIn").addEventListener("click", () => {
-  zoom = Math.min(zoom * 1.2, 10);
+  zoom = Math.min(zoom * 1.2, MAX_ZOOM);
 });
 document.getElementById("zoomOut").addEventListener("click", () => {
-  zoom = Math.max(zoom / 1.2, 0.1);
+  zoom = Math.max(zoom / 1.2, MIN_ZOOM);
 });
 
 // === SCROLL / TRACKPAD ZOOM ===
 canvas.addEventListener("wheel", e => {
-  e.preventDefault(); // stop page scroll
+  e.preventDefault();
   const zoomIntensity = 0.1;
-
-  // detect direction: negative deltaY = zoom in, positive = zoom out
   const direction = e.deltaY > 0 ? -1 : 1;
   const factor = 1 + direction * zoomIntensity;
 
-  // OPTIONAL: zoom centered on cursor instead of screen center
   const mouseX = e.clientX;
   const mouseY = e.clientY;
-
-  // compute world position before zoom
   const worldX = (mouseX - center.x - panX) / (SCALE * zoom);
   const worldY = (mouseY - center.y - panY) / (SCALE * zoom);
 
-  // apply zoom
-  const newZoom = Math.min(Math.max(zoom * factor, 0.5), 12);
-  zoom = newZoom;
+  zoom = Math.min(Math.max(zoom * factor, MIN_ZOOM), MAX_ZOOM);
 
-  // adjust pan so the point under the cursor stays stable
   panX = mouseX - center.x - worldX * (SCALE * zoom);
   panY = mouseY - center.y - worldY * (SCALE * zoom);
 });
-
 
 window.addEventListener("resize", () => {
   bgCanvas.width = canvas.width = window.innerWidth;
