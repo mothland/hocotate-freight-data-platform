@@ -532,11 +532,11 @@ Do note the ship starts its journey in Hocotate! And no, it does not go back (ye
 
 ## 🧰 Personal TODO
 
--  Add **return-to-base tracking** once ships complete missions (they don’t go back yet).
+- Add **return-to-base tracking** once ships complete missions (they don’t go back yet).
 
--  **Business Layer (BL)** and **Serving Layer (SL)** batch jobs.
+- Build **Serving Layer (SL)** batch jobs and dashboards.
 
--  **Enforce schemas**, add **Schema Registry setup** and add a **querying layer** in MinIO to make it a proper lake.
+- **Enforce schemas**, add a **Schema Registry**, and integrate an **SQL query engine** (e.g., Trino) over MinIO to transform it into a fully queryable data lakehouse.
 
 - **Make Grafana Templates** instead of assuming people will do their own...
 
